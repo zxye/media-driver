@@ -58,6 +58,40 @@
 #define I915_ERROR_UEVENT        "ERROR"
 #define I915_RESET_UEVENT        "RESET"
 
+/*
+ * i915_user_extension: Base class for defining a chain of extensions
+ *
+ * Many interfaces need to grow over time. In most cases we can simply
+ * extend the struct and have userspace pass in more data. Another option,
+ * as demonstrated by Vulkan's approach to providing extensions for forward
+ * and backward compatibilty, is to use a list of optional structs to
+ * provide those extra details.
+ *
+ * The key advantage to using an extension chain is that it allows us to
+ * redefine the interface more easily than an ever growing struct of
+ * increasing complexity, and for large parts of that interface to be
+ * entirely optional. The downside is more pointer chasing; chasing across
+ * the __user boundary with pointers encapsulated inside u64.
+ */
+struct i915_user_extension {
+	__u64 next_extension;
+	__u64 name;
+};
+/*
+ * Different engines serve different roles, and there may be more than one
+ * engine serving each role. enum drm_i915_gem_engine_class provides a
+ * classification of the role of the engine, which may be used when requesting
+ * operations to be performed on a certain subset of engines, or for providing
+ * information about that group.
+ */
+enum drm_i915_gem_engine_class {
+	I915_ENGINE_CLASS_RENDER	= 0,
+	I915_ENGINE_CLASS_COPY		= 1,
+	I915_ENGINE_CLASS_VIDEO		= 2,
+	I915_ENGINE_CLASS_VIDEO_ENHANCE	= 3,
+
+	I915_ENGINE_CLASS_INVALID	= -1
+};
 /* Each region is a minimum of 16k, and there are at most 255 of them.
  */
 #define I915_NR_TEX_REGIONS 255    /* table size 2k - maximum due to use
@@ -255,6 +289,7 @@ struct drm_i915_cmd_parser_append {
 #define DRM_I915_OVERLAY_PUT_IMAGE    0x27
 #define DRM_I915_OVERLAY_ATTRS    0x28
 #define DRM_I915_GEM_EXECBUFFER2    0x29
+#define DRM_I915_GEM_EXECBUFFER2_WR	DRM_I915_GEM_EXECBUFFER2
 #define DRM_I915_GET_SPRITE_COLORKEY    0x2a
 #define DRM_I915_SET_SPRITE_COLORKEY    0x2b
 #define DRM_I915_GEM_WAIT    0x2c
@@ -267,6 +302,7 @@ struct drm_i915_cmd_parser_append {
 #define DRM_I915_GEM_USERPTR        0x33
 #define DRM_I915_GEM_CONTEXT_GETPARAM    0x34
 #define DRM_I915_GEM_CONTEXT_SETPARAM    0x35
+#define DRM_I915_QUERY			0x39
 #define DRM_I915_PERFMON        0x3e
 
 #ifndef ANDROID
@@ -297,6 +333,7 @@ struct drm_i915_cmd_parser_append {
 #define DRM_IOCTL_I915_GEM_INIT        DRM_IOW(DRM_COMMAND_BASE + DRM_I915_GEM_INIT, struct drm_i915_gem_init)
 #define DRM_IOCTL_I915_GEM_EXECBUFFER    DRM_IOW(DRM_COMMAND_BASE + DRM_I915_GEM_EXECBUFFER, struct drm_i915_gem_execbuffer)
 #define DRM_IOCTL_I915_GEM_EXECBUFFER2    DRM_IOW(DRM_COMMAND_BASE + DRM_I915_GEM_EXECBUFFER2, struct drm_i915_gem_execbuffer2)
+#define DRM_IOCTL_I915_GEM_EXECBUFFER2_WR	DRM_IOWR(DRM_COMMAND_BASE + DRM_I915_GEM_EXECBUFFER2_WR, struct drm_i915_gem_execbuffer2)
 #define DRM_IOCTL_I915_GEM_PIN        DRM_IOWR(DRM_COMMAND_BASE + DRM_I915_GEM_PIN, struct drm_i915_gem_pin)
 #define DRM_IOCTL_I915_GEM_UNPIN    DRM_IOW(DRM_COMMAND_BASE + DRM_I915_GEM_UNPIN, struct drm_i915_gem_unpin)
 #define DRM_IOCTL_I915_GEM_BUSY        DRM_IOWR(DRM_COMMAND_BASE + DRM_I915_GEM_BUSY, struct drm_i915_gem_busy)
@@ -322,13 +359,14 @@ struct drm_i915_cmd_parser_append {
 #define DRM_IOCTL_I915_SET_SPRITE_COLORKEY DRM_IOWR(DRM_COMMAND_BASE + DRM_I915_SET_SPRITE_COLORKEY, struct drm_intel_sprite_colorkey)
 #define DRM_IOCTL_I915_GET_SPRITE_COLORKEY DRM_IOWR(DRM_COMMAND_BASE + DRM_I915_GET_SPRITE_COLORKEY, struct drm_intel_sprite_colorkey)
 #define DRM_IOCTL_I915_GEM_WAIT        DRM_IOWR(DRM_COMMAND_BASE + DRM_I915_GEM_WAIT, struct drm_i915_gem_wait)
-#define DRM_IOCTL_I915_GEM_CONTEXT_CREATE    DRM_IOWR (DRM_COMMAND_BASE + DRM_I915_GEM_CONTEXT_CREATE, struct drm_i915_gem_context_create)
+#define DRM_IOCTL_I915_GEM_CONTEXT_CREATE	DRM_IOWR (DRM_COMMAND_BASE + DRM_I915_GEM_CONTEXT_CREATE, struct drm_i915_gem_context_create_v2)
 #define DRM_IOCTL_I915_GEM_CONTEXT_DESTROY    DRM_IOW (DRM_COMMAND_BASE + DRM_I915_GEM_CONTEXT_DESTROY, struct drm_i915_gem_context_destroy)
 #define DRM_IOCTL_I915_REG_READ            DRM_IOWR (DRM_COMMAND_BASE + DRM_I915_REG_READ, struct drm_i915_reg_read)
 #define DRM_IOCTL_I915_GET_RESET_STATS        DRM_IOWR (DRM_COMMAND_BASE + DRM_I915_GET_RESET_STATS, struct drm_i915_reset_stats)
 #define DRM_IOCTL_I915_GEM_USERPTR            DRM_IOWR (DRM_COMMAND_BASE + DRM_I915_GEM_USERPTR, struct drm_i915_gem_userptr)
 #define DRM_IOCTL_I915_GEM_CONTEXT_GETPARAM    DRM_IOWR (DRM_COMMAND_BASE + DRM_I915_GEM_CONTEXT_GETPARAM, struct drm_i915_gem_context_param)
 #define DRM_IOCTL_I915_GEM_CONTEXT_SETPARAM    DRM_IOWR (DRM_COMMAND_BASE + DRM_I915_GEM_CONTEXT_SETPARAM, struct drm_i915_gem_context_param)
+#define DRM_IOCTL_I915_QUERY			DRM_IOWR(DRM_COMMAND_BASE + DRM_I915_QUERY, struct drm_i915_query)
 
 #ifndef ANDROID
 #define DRM_IOCTL_I915_LOAD_BALANCING_HINT        DRM_IOWR(DRM_COMMAND_BASE + DRM_I915_LOAD_BALANCING_HINT, struct drm_i915_ring_load_query)
@@ -1281,6 +1319,16 @@ struct drm_i915_gem_context_create {
     __u32 pad;
 };
 
+struct drm_i915_gem_context_create_v2 {
+	/*  output: id of new context*/
+	__u32 ctx_id;
+	__u32 flags;
+#define I915_GEM_CONTEXT_SHARE_GTT		0x1
+#define I915_GEM_CONTEXT_SINGLE_TIMELINE	0x2
+	__u32 share_ctx;
+	__u32 pad;
+};
+
 struct drm_i915_gem_context_destroy {
     __u32 ctx_id;
     __u32 pad;
@@ -1343,8 +1391,66 @@ struct drm_i915_gem_context_param {
 #define I915_CONTEXT_PARAM_NO_ZEROMAP    0x2
 #define I915_CONTEXT_PARAM_GTT_SIZE    0x3
 #define I915_CONTEXT_PARAM_SSEU     0x6
+
+/*
+ * I915_CONTEXT_PARAM_ENGINES:
+ *
+ * Bind this context to operate on this subset of available engines. Henceforth,
+ * the I915_EXEC_RING selector for DRM_IOCTL_I915_GEM_EXECBUFFER2 operates as
+ * an index into this array of engines; I915_EXEC_DEFAULT selecting engine[0]
+ * and upwards. The array created is offset by 1, such that by default
+ * I915_EXEC_DEFAULT is left empty, to be filled in as directed. Slots 1...N
+ * are then filled in using the specified (class, instance).
+ *
+ * Setting the number of engines bound to the context will revert back to
+ * default settings.
+ *
+ * See struct i915_context_param_engines.
+ *
+ * Extensions:
+ *   i915_context_engines_load_balance (I915_CONTEXT_ENGINES_EXT_LOAD_BALANCE)
+ */
+#define I915_CONTEXT_PARAM_ENGINES	0x9
+
     __u64 value;
 };
+
+/*
+ * i915_context_engines_load_balance:
+ *
+ * Enable load balancing across this set of engines.
+ *
+ * Into the I915_EXEC_DEFAULT slot, a virtual engine is created that when
+ * used will proxy the execbuffer request onto one of the set of engines
+ * in such a way as to distribute the load evenly across the set.
+ *
+ * The set of engines must be compatible (e.g. the same HW class) as they
+ * will share the same logical GPU context and ring.
+ *
+ * The context must be defined to use a single timeline for all engines.
+ */
+struct i915_context_engines_load_balance {
+	struct i915_user_extension base;
+
+	__u64 flags; /* all undefined flags must be zero */
+	__u64 engines_mask;
+
+	__u64 mbz[4]; /* reserved for future use; must be zero */
+};
+
+struct i915_context_param_engines {
+	__u64 extensions;
+#define I915_CONTEXT_ENGINES_EXT_LOAD_BALANCE 0
+
+	struct {
+#ifdef __cplusplus
+		__u32 engine_class;
+#else
+		__u32 class; /* see enum drm_i915_gem_engine_class */
+#endif
+		__u32 instance;
+	} class_instance[0];
+        };
 
 struct drm_i915_gem_context_param_sseu {
      __u64 flags;
@@ -1373,5 +1479,101 @@ typedef struct drm_i915_ring_load_query
     int query_size;
     drm_i915_ring_load_info *load_info;
 } drm_i915_ring_load_query;
+
+struct drm_i915_query_item {
+	__u64 query_id;
+#define DRM_I915_QUERY_TOPOLOGY_INFO    1
+#define DRM_I915_QUERY_ENGINE_INFO	2
+
+	/*
+	 * When set to zero by userspace, this is filled with the size of the
+	 * data to be written at the data_ptr pointer. The kernel set this
+	 * value to a negative value to signal an error on a particular query
+	 * item.
+	 */
+	__s32 length;
+
+	/*
+	 * Unused for now.
+	 */
+	__u32 flags;
+
+	/*
+	 * Data will be written at the location pointed by data_ptr when the
+	 * value of length matches the length of the data to be written by the
+	 * kernel.
+	 */
+	__u64 data_ptr;
+};
+
+struct drm_i915_query {
+	__u32 num_items;
+
+	/*
+	 * Unused for now.
+	 */
+	__u32 flags;
+
+	/*
+	 * This point to an array of num_items drm_i915_query_item structures.
+	 */
+	__u64 items_ptr;
+};
+
+/**
+ * struct drm_i915_engine_info
+ *
+ * Describes one engine known to the driver, whether or not is physical engine
+ * only, or it can also be targetted from userspace, and what are its
+ * capabilities where applicable.
+ */
+struct drm_i915_engine_info {
+	/**
+	 * Engine flags.
+	 *
+	 * I915_ENGINE_FLAG_PHYSICAL - engine exists in the hardware
+	 * 915_ENGINE_FLAG_ABI - engine can be submitted to via execbuf
+	 */
+	__u64 flags;
+#define I915_ENGINE_FLAG_PHYSICAL	(1 << 0)
+#define I915_ENGINE_FLAG_ABI		(1 << 1)
+
+	/** Engine class as in enum drm_i915_gem_engine_class. */
+#ifdef __cplusplus
+	__u16 engine_class;
+#else
+	__u16 class;
+#endif
+	/** Engine instance number. */
+	__u16 instance;
+
+	/** Reserved field must be cleared to zero. */
+	__u32 rsvd0;
+
+	/** Capabilities of this engine. */
+	__u64 capabilities;
+#define I915_VCS_CLASS_CAPABILITY_HEVC	(1 << 0)
+#define I915_VCS_CLASS_CAPABILITY_SFC	(1 << 1)
+
+	/** Reserved fields must be cleared to zero. */
+	__u64 rsvd1[2];
+};
+
+/**
+ * struct drm_i915_query_engine_info
+ *
+ * Engine info query enumerates all the engines known to the driver returning
+ * the array of struct drm_i915_engine_info structures.
+ */
+struct drm_i915_query_engine_info {
+	/** Number of struct drm_i915_engine_info structs following. */
+	__u32 num_engines;
+
+	/** MBZ */
+	__u32 rsvd[3];
+
+	/** Marker for drm_i915_engine_info structures. */
+	struct drm_i915_engine_info engines[];
+};
 
 #endif /* _I915_DRM_H_ */
