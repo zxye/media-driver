@@ -1221,9 +1221,11 @@ MOS_STATUS CodechalDecode::EndStatusReport(
     regParams.dwOffset          = errStatusOffset;
     regParams.dwRegister        = (m_standard == CODECHAL_HEVC && mmioRegistersHcp) ?
         mmioRegistersHcp->hcpCabacStatusRegOffset : mmioRegistersMfx->mfxErrorFlagsRegOffset;
+#ifdef STATUS_REPORT_MMIO
     CODECHAL_DECODE_CHK_STATUS_RETURN(m_miInterface->AddMiStoreRegisterMemCmd(
         cmdBuffer,
         &regParams));
+#endif
 
     //Frame CRC
     if (m_reportFrameCrc)
@@ -1244,9 +1246,11 @@ MOS_STATUS CodechalDecode::EndStatusReport(
             regParams.dwRegister        = m_hcpFrameCrcRegOffset;
         }
 
+#ifdef STATUS_REPORT_MMIO
         CODECHAL_DECODE_CHK_STATUS_RETURN(m_miInterface->AddMiStoreRegisterMemCmd(
             cmdBuffer,
             &regParams));
+#endif
     }
 
     //MB Count
@@ -1259,9 +1263,11 @@ MOS_STATUS CodechalDecode::EndStatusReport(
     regParams.dwOffset          = mbCountOffset;
     regParams.dwRegister        = (m_standard == CODECHAL_HEVC && mmioRegistersHcp) ?
         mmioRegistersHcp->hcpDecStatusRegOffset : mmioRegistersMfx->mfxMBCountRegOffset;
+#ifdef STATUS_REPORT_MMIO
     CODECHAL_DECODE_CHK_STATUS_RETURN(m_miInterface->AddMiStoreRegisterMemCmd(
         cmdBuffer,
         &regParams));
+#endif
 
     // First copy all the SW data in to the eStatus buffer
     m_decodeStatusBuf.m_decodeStatus[currIndex].m_swStoredData       = m_decodeStatusBuf.m_swStoreData;
@@ -1277,9 +1283,11 @@ MOS_STATUS CodechalDecode::EndStatusReport(
     dataParams.dwResourceOffset = storeDataOffset;
     dataParams.dwValue          = CODECHAL_STATUS_QUERY_END_FLAG;
 
+#ifdef STATUS_REPORT_MMIO
     CODECHAL_DECODE_CHK_STATUS_RETURN(m_miInterface->AddMiStoreDataImmCmd(
         cmdBuffer,
         &dataParams));
+#endif
 
     m_decodeStatusBuf.m_currIndex = (m_decodeStatusBuf.m_currIndex + 1) % CODECHAL_DECODE_STATUS_NUM;
 
