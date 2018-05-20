@@ -564,7 +564,34 @@ MOS_STATUS GpuContextSpecific::SubmitCommandBuffer(
     {
         if (osContext->bKMDHasVCS2)
         {
-            if (osContext->bPerCmdBufferBalancing && osInterface->pfnGetVdboxNodeId)
+            if (1) //@@@@ FIXME
+            {
+                unsigned int nengine = 2;
+                struct class_instance uengines[2];
+                __u32 engine_class = I915_ENGINE_CLASS_VIDEO;
+                __u64 caps = 0;//I915_VCS_CLASS_CAPABILITY_SFC;
+
+                mos_query_engines(osContext->fd,engine_class,caps,&nengine,uengines);
+                for(int i=0; i< nengine; i++)
+                {
+                    printf("@@@@ %s: engine_class %d, instance %d\n",
+                           __FUNCTION__,
+                           uengines[i].engine_class,
+                           uengines[i].instance);
+                }
+
+                mos_set_balancer(osContext->intel_context,uengines, nengine);
+                execFlag = I915_EXEC_DEFAULT;
+                /* @@@@ for debug, run on two VCS
+                static int ii=0;
+                if (++ii%2)
+                    execFlag = I915_EXEC_BSD | I915_EXEC_BSD_RING2;
+                else
+                    execFlag = I915_EXEC_BSD | I915_EXEC_BSD_RING1;
+                */
+                printf("@@@@ execFlag = %x\n", execFlag);
+            }
+            else if (osContext->bPerCmdBufferBalancing && osInterface->pfnGetVdboxNodeId)
             {
                 execFlag = GetVcsExecFlag(osInterface, cmdBuffer, gpuNode);
             }

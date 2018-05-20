@@ -553,7 +553,7 @@ MOS_STATUS OsContextSpecific::Init(PMOS_CONTEXT pOsDriverContext)
     m_use64BitRelocs = true;
 
 #ifndef ANDROID
-    m_intelContext = mos_gem_context_create(pOsDriverContext->bufmgr);
+    m_intelContext = mos_gem_context_create_v2(pOsDriverContext->bufmgr);
 
     if (m_intelContext == nullptr)
     {

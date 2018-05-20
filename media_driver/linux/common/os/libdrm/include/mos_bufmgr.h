@@ -282,6 +282,7 @@ int mos_get_aperture_sizes(int fd, size_t *mappable, size_t *total);
 int mos_bufmgr_gem_get_devid(struct mos_bufmgr *bufmgr);
 
 struct mos_linux_context *mos_gem_context_create(struct mos_bufmgr *bufmgr);
+struct mos_linux_context *mos_gem_context_create_v2(struct mos_bufmgr *bufmgr);
 void mos_gem_context_destroy(struct mos_linux_context *ctx);
 int mos_gem_bo_context_exec(struct mos_linux_bo *bo, struct mos_linux_context *ctx,
                   int used, unsigned int flags);
@@ -378,6 +379,20 @@ int mos_set_context_param(struct mos_linux_context *ctx,
 
 int mos_get_subslice_total(int fd, unsigned int *subslice_total);
 int mos_get_eu_total(int fd, unsigned int *eu_total);
+
+struct class_instance {
+	uint32_t engine_class;
+	uint32_t instance;
+};
+int mos_query_engines(int fd,
+                      __u32 engine_class,
+                      __u64 caps,
+                      unsigned int *nengine,
+                      struct class_instance *ci);
+int mos_set_balancer(struct mos_linux_context *ctx,
+                     const struct class_instance *ci,
+                     unsigned int count);
+
 #if defined(__cplusplus)
 extern "C" {
 #endif
