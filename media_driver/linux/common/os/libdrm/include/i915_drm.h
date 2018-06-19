@@ -1410,7 +1410,7 @@ struct drm_i915_gem_context_param {
  * Extensions:
  *   i915_context_engines_load_balance (I915_CONTEXT_ENGINES_EXT_LOAD_BALANCE)
  */
-#define I915_CONTEXT_PARAM_ENGINES	0x9
+#define I915_CONTEXT_PARAM_ENGINES	0x7
 
     __u64 value;
 };
