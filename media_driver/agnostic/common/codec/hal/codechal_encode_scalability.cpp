@@ -62,8 +62,15 @@ MOS_STATUS CodecHalEncodeScalability_InitializeState (
     CODECHAL_ENCODE_CHK_STATUS_RETURN(Mos_VirtualEngineInterface_Initialize(osInterface, &VEInitParms));
     pScalabilityState->pVEInterface = pVEInterface = osInterface->pVEInterf;
 
-    CODECHAL_ENCODE_CHK_STATUS_RETURN(pVEInterface->pfnVEGetHintParams(pVEInterface, true, &pScalabilityState->pScalHintParms));
-    CODECHAL_ENCODE_CHK_STATUS_RETURN(pVEInterface->pfnVEGetHintParams(pVEInterface, false, &pScalabilityState->pSingleHintParms));
+    if (pVEInterface->pfnVEGetHintParams)
+    {
+        CODECHAL_ENCODE_CHK_STATUS_RETURN(pVEInterface->pfnVEGetHintParams(pVEInterface, true, &pScalabilityState->pScalHintParms));
+    }
+
+    if (pVEInterface->pfnVEGetHintParams)
+    {
+        CODECHAL_ENCODE_CHK_STATUS_RETURN(pVEInterface->pfnVEGetHintParams(pVEInterface, false, &pScalabilityState->pSingleHintParms));
+    }
 
     return eStatus;
 }

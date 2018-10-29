@@ -1499,7 +1499,10 @@ MOS_STATUS CodecHalDecodeScalability_SetHintParams(
     else
     {
         VEParams.bScalableMode = false;
-        CODECHAL_DECODE_CHK_STATUS_RETURN(pVEInterface->pfnVESetHintParams(pVEInterface, &VEParams));
+        if (pVEInterface->pfnVESetHintParams)
+        {
+            CODECHAL_DECODE_CHK_STATUS_RETURN(pVEInterface->pfnVESetHintParams(pVEInterface, &VEParams));
+        }
     }
 
     return eStatus;
@@ -1971,8 +1974,14 @@ MOS_STATUS CodecHalDecodeScalability_InitializeState (
     CODECHAL_DECODE_CHK_STATUS_RETURN(Mos_VirtualEngineInterface_Initialize(osInterface, &VEInitParms));
     pScalabilityState->pVEInterface = pVEInterface = osInterface->pVEInterf;
 
-    CODECHAL_DECODE_CHK_STATUS_RETURN(pVEInterface->pfnVEGetHintParams(pVEInterface, true, &pScalabilityState->pScalHintParms));
-    CODECHAL_DECODE_CHK_STATUS_RETURN(pVEInterface->pfnVEGetHintParams(pVEInterface, false, &pScalabilityState->pSingleHintParms));
+    if (pVEInterface->pfnVEGetHintParams)
+    {
+        CODECHAL_DECODE_CHK_STATUS_RETURN(pVEInterface->pfnVEGetHintParams(pVEInterface, true, &pScalabilityState->pScalHintParms));
+    }
+    if (pVEInterface->pfnVEGetHintParams)
+    {
+        CODECHAL_DECODE_CHK_STATUS_RETURN(pVEInterface->pfnVEGetHintParams(pVEInterface, false, &pScalabilityState->pSingleHintParms));
+    }
 
 #if (_DEBUG || _RELEASE_INTERNAL)
     MOS_ZeroMemory(&UserFeatureData, sizeof(UserFeatureData));
