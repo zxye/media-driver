@@ -1288,13 +1288,14 @@ MOS_STATUS Linux_InitContext(
     // when MODS enabled, intel_context will be created by pOsContextSpecific, should not recreate it here, or will cause memory leak.
     if (!MODSEnabled)
     {
-       pContext->intel_context = mos_gem_context_create(pOsDriverContext->bufmgr);
+       pContext->intel_context = mos_gem_context_create_v2(pOsDriverContext->bufmgr);
 
        if (pContext->intel_context == nullptr)
        {
             MOS_OS_ASSERTMESSAGE("Failed to create drm intel context");
             return MOS_STATUS_UNKNOWN;
        }
+       pContext->ctx_caps = -1;
     }
 
     pContext->intel_context->pOsContext = pContext;
@@ -4109,6 +4110,12 @@ MOS_STATUS Mos_Specific_CreateGpuContext(
             MOS_OS_CHK_STATUS_RETURN(gpuContextSpecific->Init(gpuContextMgr->GetOsContext()));
 
             pOsContextSpecific->SetGpuContextHandle(mosGpuCxt, gpuContextSpecific->GetGpuContextHandle());
+
+            if (typeid(*createOption) == typeid(MOS_GPUCTX_CREATOPTIONS_ENHANCED))
+            {
+                PMOS_GPUCTX_CREATOPTIONS_ENHANCED createOptionEnhanced = static_cast<PMOS_GPUCTX_CREATOPTIONS_ENHANCED>(createOption);
+                gpuContextSpecific->SetContextParam(createOptionEnhanced);
+            }
         }
 
         MOS_OS_CHK_NULL_RETURN(createOption);
@@ -6125,7 +6132,7 @@ MOS_STATUS Mos_Specific_InitInterface(
     MOS_OS_NORMALMESSAGE("mm:Mos_Specific_InitInterface called.");
 
     pOsInterface->modularizedGpuCtxEnabled    = true;
-    pOsInterface->veDefaultEnable             = false;
+    pOsInterface->veDefaultEnable             = true;
 
     // Create Linux OS Context
     pOsContext = (PMOS_OS_CONTEXT)MOS_AllocAndZeroMemory(sizeof(MOS_OS_CONTEXT));
@@ -6169,6 +6176,7 @@ MOS_STATUS Mos_Specific_InitInterface(
 
         OsContextSpecific *pOsContextSpecific = static_cast<OsContextSpecific *>(pOsInterface->osContextPtr);
         pOsContext->intel_context             = pOsContextSpecific->GetDrmContext();
+        pOsContext->ctx_caps = -1;
         pOsContext->pGmmClientContext         = nullptr;
     }
     else

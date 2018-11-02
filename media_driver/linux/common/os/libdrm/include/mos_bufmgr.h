@@ -260,6 +260,7 @@ int mos_get_aperture_sizes(int fd, size_t *mappable, size_t *total);
 int mos_bufmgr_gem_get_devid(struct mos_bufmgr *bufmgr);
 
 struct mos_linux_context *mos_gem_context_create(struct mos_bufmgr *bufmgr);
+struct mos_linux_context *mos_gem_context_create_v2(struct mos_bufmgr *bufmgr);
 void mos_gem_context_destroy(struct mos_linux_context *ctx);
 int mos_gem_bo_context_exec(struct mos_linux_bo *bo, struct mos_linux_context *ctx,
                   int used, unsigned int flags);
@@ -358,6 +359,22 @@ int mos_get_subslice_mask(int fd, unsigned int *subslice_mask);
 int mos_get_slice_mask(int fd, unsigned int *slice_mask);
 uint8_t mos_switch_off_n_bits(uint8_t in_mask, int n);
 unsigned int mos_hweight8(uint8_t w);
+
+struct class_instance {
+	uint16_t engine_class;
+	uint16_t instance;
+};
+
+#define MAX_VDBOX_NUM 64
+
+int mos_query_engines(int fd,
+                      __u16 engine_class,
+                      __u64 caps,
+                      unsigned int *nengine,
+                      struct class_instance *ci);
+int mos_set_context_param_load_balance(struct mos_linux_context *ctx,
+                     const struct class_instance *ci,
+                     unsigned int count);
 
 #if defined(__cplusplus)
 extern "C" {

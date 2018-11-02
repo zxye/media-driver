@@ -313,6 +313,15 @@ mosdrmIoctl(int fd, unsigned long request, void *arg)
             ret = 0;
         }
             break;
+        case DRM_IOCTL_I915_GEM_CONTEXT_CREATE_v2:
+        {
+            typedef struct drm_i915_gem_context_create_v2 create_t;
+            create_t* create = (create_t *)arg;
+            create->ctx_id = 1; //We suppose only create  once. If may create several times, need ++;
+            ret = 0;
+        }
+            break;
+
         case DRM_IOCTL_I915_GEM_USERPTR:
         case DRM_IOCTL_I915_GEM_CONTEXT_DESTROY:
         case DRM_IOCTL_GEM_CLOSE:
