@@ -222,6 +222,12 @@ mos_bo_mrb_exec(struct mos_linux_bo *bo, int used,
     }
 }
 
+void
+mos_bo_set_exec_object_async(struct mos_linux_bo *bo)
+{
+    bo->bufmgr->set_exec_object_async(bo);
+}
+
 #ifdef ANDROID
 int
 mos_bo_mrb_fence_exec(struct mos_linux_bo *bo, int used,

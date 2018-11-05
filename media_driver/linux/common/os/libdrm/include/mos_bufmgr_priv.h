@@ -298,6 +298,8 @@ struct mos_bufmgr {
      */
     int (*bo_flink) (struct mos_linux_bo *bo, uint32_t * name);
 
+    void (*set_exec_object_async) (struct mos_linux_bo *bo);
+
 #ifdef ANDROID
     /**
      * Create a dma-buf prime fd for a buffer which can be used by other apps
