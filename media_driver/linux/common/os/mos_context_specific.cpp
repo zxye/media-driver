@@ -607,6 +607,12 @@ MOS_STATUS OsContextSpecific::Init(PMOS_CONTEXT pOsDriverContext)
             MOS_OS_ASSERTMESSAGE("Failed to create drm intel context");
             return MOS_STATUS_UNKNOWN;
         }
+        m_slaveContext = mos_gem_context_create_shared(pOsDriverContext->bufmgr, m_intelContext);
+        if (m_slaveContext == nullptr)
+        {
+            MOS_OS_ASSERTMESSAGE("Failed to create drm slave context");
+            return MOS_STATUS_UNKNOWN;
+        }
 
         MOS_ZeroMemory(&m_sseu, sizeof(m_sseu));
         m_sseu.engine_class = 0;

@@ -488,6 +488,8 @@ struct _MOS_OS_CONTEXT
     // Controlled OS resources (for analysis)
     MOS_BUFMGR       *bufmgr;
     MOS_LINUX_CONTEXT   *intel_context;
+    MOS_LINUX_CONTEXT   *slave_context;
+    int32_t             submit_fence;
     __u64               ctx_caps;
     uint32_t            uEnablePerfTag;           //!< 0: Do not pass PerfTag to KMD, perf data collection disabled;
                                                   //!< 1: Pass PerfTag to MVP driver, perf data collection enabled;

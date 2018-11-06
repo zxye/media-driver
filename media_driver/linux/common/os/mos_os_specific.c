@@ -51,6 +51,9 @@
 #include <sys/types.h>
 #endif
 
+#include "mos_os_virtualengine.h"
+#include "mos_util_user_interface.h"
+
 //!
 //! \brief DRM VMAP patch
 //!
@@ -199,6 +202,8 @@ int32_t Linux_GetCommandBuffer(
     pCmdBuffer->iVdboxNodeIndex = MOS_VDBOX_NODE_INVALID;
 
     MOS_ZeroMemory(pCmdBuffer->pCmdBase, cmd_bo->size);
+    pCmdBuffer->iSubmissionType = SUBMISSION_TYPE_SINGLE_PIPE;
+    MOS_ZeroMemory(&pCmdBuffer->Attributes, sizeof(pCmdBuffer->Attributes));
     bResult = true;
 
 finish:
@@ -1097,6 +1102,10 @@ void Linux_Destroy(
     {
         mos_gem_context_destroy(pOsContext->intel_context);
     }
+    if (!MODSEnabled && (pOsContext->slave_context))
+    {
+        mos_gem_context_destroy(pOsContext->slave_context);
+    }
 
     pOsContext->GmmFuncs.pfnDeleteClientContext(pOsContext->pGmmClientContext);
 
@@ -1289,16 +1298,24 @@ MOS_STATUS Linux_InitContext(
     if (!MODSEnabled)
     {
        pContext->intel_context = mos_gem_context_create_v2(pOsDriverContext->bufmgr);
+       pContext->slave_context = mos_gem_context_create_shared(pOsDriverContext->bufmgr,pContext->intel_context);
 
        if (pContext->intel_context == nullptr)
        {
             MOS_OS_ASSERTMESSAGE("Failed to create drm intel context");
             return MOS_STATUS_UNKNOWN;
        }
+       if (pContext->slave_context == nullptr)
+       {
+            MOS_OS_ASSERTMESSAGE("Failed to create slave context");
+            return MOS_STATUS_UNKNOWN;
+       }
+       pContext->submit_fence = -1;
        pContext->ctx_caps = -1;
     }
 
     pContext->intel_context->pOsContext = pContext;
+    pContext->slave_context->pOsContext = pContext;
 #else
     pContext->intel_context = nullptr;
 #endif
@@ -3529,11 +3546,14 @@ MOS_STATUS Mos_Specific_SubmitCommandBuffer(
     drm_clip_rect_t                     *cliprects;
     int32_t                             num_cliprects;
     int32_t                             DR4, ret;
+    int                                 fence = -1;
+    unsigned int                        fence_flag = 0;
 #ifndef ANDROID
     uint64_t                            boOffset;
 
     boOffset = 0;
 #endif
+
     dwAddCb2 = 0xffffffff;
     eStatus  = MOS_STATUS_SUCCESS;
     ret      = 0;
@@ -3611,6 +3631,11 @@ MOS_STATUS Mos_Specific_SubmitCommandBuffer(
         {
             *((uint32_t*)((uint8_t*)cmd_bo->virt + pCurrentPatch->PatchOffset)) =
                     boOffset + pCurrentPatch->AllocationOffset;
+        }
+
+        if (pCmdBuffer->iSubmissionType == SUBMISSION_TYPE_MULTI_PIPE_SLAVE)
+        {
+            mos_bo_set_exec_object_async(alloc_bo);
         }
 
         // This call will patch the command buffer with the offsets of the indirect state region of the command buffer
@@ -3810,13 +3835,50 @@ MOS_STATUS Mos_Specific_SubmitCommandBuffer(
                                        ExecFlag);
      }
 #else
+
+     if (pCmdBuffer->iSubmissionType & SUBMISSION_TYPE_MULTI_PIPE_MASK)
+     {
+         MOS_LINUX_CONTEXT *queue = pOsContext->intel_context;
+         if (ExecFlag = MOS_GPU_NODE_VIDEO || ExecFlag == MOS_GPU_NODE_VIDEO2)
+         {
+             ExecFlag = I915_EXEC_DEFAULT;
+         }
+         if(pCmdBuffer->iSubmissionType == SUBMISSION_TYPE_MULTI_PIPE_SLAVE)
+         {
+             fence = pOsContext->submit_fence;
+             fence_flag = I915_EXEC_FENCE_SUBMIT;
+             queue = pOsContext->slave_context;
+         }
+         if(pCmdBuffer->iSubmissionType == SUBMISSION_TYPE_MULTI_PIPE_MASTER)
+         {
+             fence_flag = I915_EXEC_FENCE_OUT;
+         }
+
+         ret = mos_gem_bo_context_exec2_with_fence(cmd_bo,
+                                       cmd_bo->size,
+                                       queue,
+                                       cliprects,
+                                       num_cliprects,
+                                       DR4,
+                                       ExecFlag,
+                                       &fence,
+                                       fence_flag);
+
+         if(pCmdBuffer->iSubmissionType == SUBMISSION_TYPE_MULTI_PIPE_MASTER)
+         {
+             pOsContext->submit_fence = fence;
+         }
+     }
+     else
+     {
      ret = mos_gem_bo_context_exec2(cmd_bo,
-                                       pOsGpuContext->uiCommandBufferSize,
+                                       cmd_bo->size,
                                        pOsContext->intel_context,
                                        cliprects,
                                        num_cliprects,
                                        DR4,
                                        ExecFlag);
+     }
 #endif
 
       if (ret != 0) {
@@ -6096,6 +6158,9 @@ void Mos_Specific_NotifyStreamIndexSharing(
     MOS_UNUSED(pOsInterface);
 }
 
+MOS_STATUS Mos_Specific_InitInterface_Ve(
+    PMOS_INTERFACE osInterface);
+
 //! \brief    Unified OS Initializes OS Linux Interface
 //! \details  Linux OS Interface initilization
 //! \param    PMOS_INTERFACE pOsInterface
@@ -6133,6 +6198,7 @@ MOS_STATUS Mos_Specific_InitInterface(
 
     pOsInterface->modularizedGpuCtxEnabled    = true;
     pOsInterface->veDefaultEnable             = true;
+    pOsInterface->phasedSubmission            = true;
 
     // Create Linux OS Context
     pOsContext = (PMOS_OS_CONTEXT)MOS_AllocAndZeroMemory(sizeof(MOS_OS_CONTEXT));
@@ -6176,6 +6242,8 @@ MOS_STATUS Mos_Specific_InitInterface(
 
         OsContextSpecific *pOsContextSpecific = static_cast<OsContextSpecific *>(pOsInterface->osContextPtr);
         pOsContext->intel_context             = pOsContextSpecific->GetDrmContext();
+        pOsContext->slave_context             = pOsContextSpecific->GetSlaveContext();
+        pOsContext->submit_fence              = -1;
         pOsContext->ctx_caps = -1;
         pOsContext->pGmmClientContext         = nullptr;
     }
@@ -6414,6 +6482,12 @@ MOS_STATUS Mos_Specific_InitInterface(
         __MEDIA_USER_FEATURE_VALUE_LINUX_PERFORMANCETAG_ENABLE_ID,
         &UserFeatureData);
     pOsContext->uEnablePerfTag = UserFeatureData.i32Data;
+
+    eStatus = Mos_Specific_InitInterface_Ve(pOsInterface);
+    if(eStatus != MOS_STATUS_SUCCESS)
+    {
+        goto finish;
+    }
 
     eStatus = MOS_STATUS_SUCCESS;
 
@@ -6684,3 +6758,88 @@ const std::vector<const void *> &GpuCmdResInfoDump::GetCmdResPtrs(PMOS_INTERFACE
     return gpuContext->GetCmdResPtrs();
 }
 #endif // MOS_COMMAND_RESINFO_DUMP_SUPPORTED
+
+MOS_STATUS Mos_Specific_InitInterface_Ve(
+    PMOS_INTERFACE osInterface)
+{
+    PLATFORM                            Platform;
+    MOS_STATUS                          eStatus;
+    MOS_USER_FEATURE_VALUE_DATA         userFeatureData;
+
+    MOS_OS_FUNCTION_ENTER;
+
+    eStatus = MOS_STATUS_SUCCESS;
+
+    // Get platform information
+    memset(&Platform, 0, sizeof(PLATFORM));
+    if (!Mos_Solo_IsEnabled())
+    {
+        osInterface->pfnGetPlatform(osInterface, &Platform);
+    }
+
+    if (GFX_IS_GEN_11_OR_LATER(Platform) || Mos_Solo_IsEnabled())
+    {
+        //keep this as false until VE is enabled by all media components
+        osInterface->bSupportVirtualEngine = false;
+        osInterface->bUseHwSemaForResSyncInVE = true;
+        osInterface->pVEInterf = nullptr;
+        osInterface->VEEnable = false;
+
+#if (_DEBUG || _RELEASE_INTERNAL)
+        // read the "Force VEBOX" user feature key
+        // 0: not force
+        MOS_ZeroMemory(&userFeatureData, sizeof(userFeatureData));
+        MOS_UserFeature_ReadValue_ID(
+            NULL,
+            __MEDIA_USER_FEATURE_VALUE_FORCE_VEBOX_ID,
+            &userFeatureData);
+        osInterface->eForceVebox = (MOS_FORCE_VEBOX)userFeatureData.u32Data;
+
+        //Read Scalable/Legacy Decode mode on Gen11+
+        //1:by default for scalable decode mode
+        //0:for legacy decode mode
+        MOS_ZeroMemory(&userFeatureData, sizeof(userFeatureData));
+        auto eStatusUserFeature = MOS_UserFeature_ReadValue_ID(
+            NULL,
+            __MEDIA_USER_FEATURE_VALUE_ENABLE_HCP_SCALABILITY_DECODE_ID,
+            &userFeatureData);
+        osInterface->bHcpDecScalabilityMode = userFeatureData.u32Data ? true : false;
+
+        if (MosUtilUserInterface::IsDefaultValueChanged() &&
+           (eStatusUserFeature == MOS_STATUS_USER_FEATURE_KEY_READ_FAILED ||
+            eStatusUserFeature == MOS_STATUS_USER_FEATURE_KEY_OPEN_FAILED))
+        {
+            osInterface->bHcpDecScalabilityMode = false;
+        }
+
+        //KMD Virtual Engine DebugOverride
+        // 0: not Override
+        MOS_ZeroMemory(&userFeatureData, sizeof(userFeatureData));
+        MOS_UserFeature_ReadValue_ID(
+            NULL,
+            __MEDIA_USER_FEATURE_VALUE_ENABLE_VE_DEBUG_OVERRIDE_ID,
+            &userFeatureData);
+        osInterface->bEnableDbgOvrdInVE = userFeatureData.u32Data ? true : false;
+
+        // UMD Vebox Virtual Engine Scalability Mode
+        // 0: disable. can set to 1 only when KMD VE is enabled.
+        MOS_ZeroMemory(&userFeatureData, sizeof(userFeatureData));
+        MOS_UserFeature_ReadValue_ID(
+            NULL,
+            __MEDIA_USER_FEATURE_VALUE_ENABLE_VEBOX_SCALABILITY_MODE_ID,
+            &userFeatureData);
+        osInterface->bVeboxScalabilityMode = userFeatureData.u32Data ? true : false;
+
+        // read "Soft Reset" user feature key
+        // 0: disable 1: enable
+        MOS_ZeroMemory(&userFeatureData, sizeof(userFeatureData));
+        MOS_UserFeature_ReadValue_ID(
+            NULL,
+            __MEDIA_USER_FEATURE_VALUE_SOFT_RESET_ENABLE_ID,
+            &userFeatureData);
+        osInterface->bSoftReset = (uint32_t)userFeatureData.i32Data;
+#endif
+    }
+
+    return eStatus;
+}

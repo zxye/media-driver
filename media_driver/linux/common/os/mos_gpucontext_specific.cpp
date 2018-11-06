@@ -30,6 +30,7 @@
 #include "mos_commandbuffer_specific.h"
 #include "mos_util_devult_specific.h"
 #include "mos_cmdbufmgr.h"
+#include "mos_os_virtualengine.h"
 
 #define MI_BATCHBUFFER_END 0x05000000
 static pthread_mutex_t command_dump_mutex = PTHREAD_MUTEX_INITIALIZER;
@@ -330,6 +331,7 @@ MOS_STATUS GpuContextSpecific::GetCommandBuffer(
 
         // zero comamnd buffer
         MOS_ZeroMemory(comamndBuffer->pCmdBase, comamndBuffer->iRemaining);
+        comamndBuffer->iSubmissionType = SUBMISSION_TYPE_SINGLE_PIPE;
         MOS_ZeroMemory(&comamndBuffer->Attributes,sizeof(comamndBuffer->Attributes));
 
         // update command buffer relared filed in GPU context
@@ -537,6 +539,8 @@ MOS_STATUS GpuContextSpecific::SubmitCommandBuffer(
     MOS_STATUS   eStatus  = MOS_STATUS_SUCCESS;
     int32_t      ret      = 0;
     PLATFORM     platform;
+    int          fence = -1;
+    unsigned int fence_flag = 0;
 
     // Command buffer object DRM pointer
     m_cmdBufFlushed = true;
@@ -591,6 +595,11 @@ MOS_STATUS GpuContextSpecific::SubmitCommandBuffer(
         {
             *((uint32_t *)((uint8_t *)cmd_bo->virt + currentPatch->PatchOffset)) =
                     boOffset + currentPatch->AllocationOffset;
+        }
+
+        if (cmdBuffer->iSubmissionType == SUBMISSION_TYPE_MULTI_PIPE_SLAVE)
+        {
+            mos_bo_set_exec_object_async(alloc_bo);
         }
 
         // This call will patch the command buffer with the offsets of the indirect state region of the command buffer
@@ -690,6 +699,7 @@ MOS_STATUS GpuContextSpecific::SubmitCommandBuffer(
     else
     {
         if ((gpuNode == MOS_GPU_NODE_VIDEO || gpuNode == MOS_GPU_NODE_VIDEO2)
+            && (cmdBuffer->iSubmissionType & SUBMISSION_TYPE_SINGLE_PIPE_MASK)
             && osInterface->ctxBasedScheduling)
         {
             unsigned int nengine = MAX_VDBOX_NUM;
@@ -847,6 +857,41 @@ MOS_STATUS GpuContextSpecific::SubmitCommandBuffer(
                 execFlag);
         }
 #else
+     if (cmdBuffer->iSubmissionType & SUBMISSION_TYPE_MULTI_PIPE_MASK)
+     {
+         MOS_LINUX_CONTEXT *queue = osContext->intel_context;
+         if (execFlag = MOS_GPU_NODE_VIDEO || execFlag == MOS_GPU_NODE_VIDEO2)
+         {
+             execFlag = I915_EXEC_DEFAULT;
+         }
+         if(cmdBuffer->iSubmissionType == SUBMISSION_TYPE_MULTI_PIPE_SLAVE)
+         {
+             fence = osContext->submit_fence;
+             fence_flag = I915_EXEC_FENCE_SUBMIT;
+             queue = osContext->slave_context;
+         }
+         if(cmdBuffer->iSubmissionType == SUBMISSION_TYPE_MULTI_PIPE_MASTER)
+         {
+             fence_flag = I915_EXEC_FENCE_OUT;
+         }
+
+         ret = mos_gem_bo_context_exec2_with_fence(cmd_bo,
+                                       cmd_bo->size,
+                                       queue,
+                                       cliprects,
+                                       num_cliprects,
+                                       DR4,
+                                       execFlag,
+                                       &fence,
+                                       fence_flag);
+
+         if(cmdBuffer->iSubmissionType == SUBMISSION_TYPE_MULTI_PIPE_MASTER)
+         {
+             osContext->submit_fence = fence;
+         }
+     }
+     else
+     {
         ret = mos_gem_bo_context_exec2(cmd_bo,
             m_commandBufferSize,
             osContext->intel_context,
@@ -854,6 +899,7 @@ MOS_STATUS GpuContextSpecific::SubmitCommandBuffer(
             num_cliprects,
             DR4,
             execFlag);
+     }
 #endif
 
         if (ret != 0)
