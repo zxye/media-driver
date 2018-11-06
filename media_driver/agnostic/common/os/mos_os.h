@@ -207,6 +207,13 @@ typedef enum _MOS_VDBOX_NODE_IND
     MOS_VDBOX_NODE_2           = 0x1
 } MOS_VDBOX_NODE_IND;
 
+#define SUBMISSION_TYPE_SINGLE_PIPE          (1<<0)
+#define SUBMISSION_TYPE_SINGLE_PIPE_MASK     (0xff)
+#define SUBMISSION_TYPE_MULTI_PIPE_ALONE     (1<<8)
+#define SUBMISSION_TYPE_MULTI_PIPE_MASTER    (1<<9)
+#define SUBMISSION_TYPE_MULTI_PIPE_SLAVE     (1<<10)
+#define SUBMISSION_TYPE_MULTI_PIPE_MASK      (0xff<<8)
+
 //!
 //! \brief Structure to command buffer
 //!
@@ -222,6 +229,7 @@ typedef struct _MOS_COMMAND_BUFFER
     int32_t             iTokenOffsetInCmdBuf;       //!< Pointer to (Un)Secure token's next field Offset
     int32_t             iCmdIndex;                  //!< command buffer's index
     MOS_VDBOX_NODE_IND  iVdboxNodeIndex;            //!< Which VDBOX buffer is binded to
+    int32_t             iSubmissionType;
 
     MOS_COMMAND_BUFFER_ATTRIBUTES Attributes;       //!< Attributes for the command buffer to be provided to KMD at submission
 } MOS_COMMAND_BUFFER;
@@ -1043,6 +1051,7 @@ typedef struct _MOS_INTERFACE
     PMOS_VIRTUALENGINE_INTERFACE    pVEInterf;
     bool                            ctxBasedScheduling;                           //!< Flag to indicate if context based scheduling enabled for virtual engine, that is VE2.0.
     bool                            veDefaultEnable = true;                       //!< Flag to indicate if virtual engine is enabled by default
+    bool                            phasedSubmission = false;                     //!< Flag to indicate if secondary command buffers are submitted together (Win) or separately (Linux)
 
     MOS_CMD_BUF_ATTRI_VE            bufAttriVe[MOS_GPU_CONTEXT_MAX];
 

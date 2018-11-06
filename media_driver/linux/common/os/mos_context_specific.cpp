@@ -452,6 +452,12 @@ MOS_STATUS OsContextSpecific::Init(PMOS_CONTEXT pOsDriverContext)
         {
             m_intelContext = mos_gem_context_create_v2(pOsDriverContext->bufmgr,
                                                        I915_GEM_CONTEXT_SHARE_GTT | I915_GEM_CONTEXT_SINGLE_TIMELINE);
+            m_slaveContext = mos_gem_context_create_shared(pOsDriverContext->bufmgr, m_intelContext);
+            if (m_slaveContext == nullptr)
+            {
+                MOS_OS_ASSERTMESSAGE("Failed to create drm slave context");
+                return MOS_STATUS_UNKNOWN;
+            }
         }
         else
         {

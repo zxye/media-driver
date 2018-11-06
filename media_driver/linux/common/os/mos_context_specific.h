@@ -156,6 +156,7 @@ public:
     void *GetpfnMemoryDecompaddr() { return (void *)m_memoryDecompress; }
 
     MOS_LINUX_CONTEXT *GetDrmContext() { return m_intelContext; }
+    MOS_LINUX_CONTEXT *GetSlaveContext() { return m_slaveContext; }
 
     GPU_CONTEXT_HANDLE GetGpuContextHandle(MOS_GPU_CONTEXT GpuContext)
     {
@@ -393,6 +394,7 @@ private:
     //! \brief  ptr to intel context
     //!
     MOS_LINUX_CONTEXT   *m_intelContext = nullptr;
+    MOS_LINUX_CONTEXT   *m_slaveContext = nullptr;
 
     //!
     //! \brief  drm device fd

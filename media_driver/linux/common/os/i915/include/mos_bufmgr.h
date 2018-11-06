@@ -254,6 +254,10 @@ int mos_query_engines(int fd,
 int mos_set_context_param_load_balance(struct mos_linux_context *ctx,
                      const struct class_instance *ci,
                      unsigned int count);
+struct mos_linux_context *mos_gem_context_create_shared(
+                         struct mos_bufmgr *bufmgr, mos_linux_context* ctx);
+int mos_set_context_param_bond_master(struct mos_linux_context *ctx);
+int mos_set_context_param_bond_slave(struct mos_linux_context *ctx);
 
 void mos_gem_context_destroy(struct mos_linux_context *ctx);
 int mos_gem_bo_context_exec(struct mos_linux_bo *bo, struct mos_linux_context *ctx,
@@ -262,6 +266,11 @@ int
 mos_gem_bo_context_exec2(struct mos_linux_bo *bo, int used, struct mos_linux_context *ctx,
                                struct drm_clip_rect *cliprects, int num_cliprects, int DR4,
                                unsigned int flags);
+int
+mos_gem_bo_context_exec2_with_fence(struct mos_linux_bo *bo, int used, struct mos_linux_context *ctx,
+                               struct drm_clip_rect *cliprects, int num_cliprects, int DR4,
+                               unsigned int flags, int *fence, unsigned int fence_flag);
+
 #ifdef ANDROID
 int mos_gem_bo_tag_exec(struct mos_linux_bo *bo, int used, struct mos_linux_context *ctx,
                         struct drm_clip_rect *cliprects, int num_cliprects,
