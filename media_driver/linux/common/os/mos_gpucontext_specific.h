@@ -240,7 +240,7 @@ private:
     OsContext *m_osContext = nullptr;
 
     MOS_GPUCTX_CREATOPTIONS_ENHANCED *m_createOptionEnhanced;
-    MOS_LINUX_CONTEXT*  m_i915Context;
+    MOS_LINUX_CONTEXT*  m_i915Context[MAX_ENGINE_INSTANCE_NUM];
     uint32_t     m_i915ExecFlag;
 
 #if MOS_COMMAND_RESINFO_DUMP_SUPPORTED
