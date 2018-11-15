@@ -121,6 +121,8 @@ MOS_STATUS CodecHalEncodeScalability_PopulateHintParams(
     CODECHAL_ENCODE_CHK_NULL_RETURN(cmdBuffer);
     PMOS_CMD_BUF_ATTRI_VE pAttriVe = (PMOS_CMD_BUF_ATTRI_VE)(cmdBuffer->Attributes.pAttriVe);
 
+    if (pAttriVe)
+    {
     if (pScalabilityState->ucScalablePipeNum >= 2)
     {
         CODECHAL_ENCODE_CHK_NULL_RETURN(pScalabilityState->pScalHintParms);
@@ -132,6 +134,7 @@ MOS_STATUS CodecHalEncodeScalability_PopulateHintParams(
         pAttriVe->VEngineHintParams = *(pScalabilityState->pSingleHintParms);
     }
     pAttriVe->bUseVirtualEngineHint = true;
+    }
 
     return eStatus;
 }

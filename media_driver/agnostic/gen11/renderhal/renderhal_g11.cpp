@@ -721,6 +721,8 @@ MOS_STATUS XRenderHal_Interface_g11::IsOvrdNeeded(
     pAttriVe    = (PMOS_CMD_BUF_ATTRI_VE)(pCmdBuffer->Attributes.pAttriVe);
     pGenericPrologParamsG11 = dynamic_cast<PRENDERHAL_GENERIC_PROLOG_PARAMS_G11>(pGenericPrologParams);
 
+    if (pAttriVe)
+    {
     if (pGenericPrologParamsG11)
     {
         // Split Frame
@@ -749,6 +751,7 @@ MOS_STATUS XRenderHal_Interface_g11::IsOvrdNeeded(
         }
     }
 #endif
+    }
 
 finish:
     return eStatus;
