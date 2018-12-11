@@ -4097,9 +4097,15 @@ MOS_STATUS Mos_Specific_CreateGpuContext(
             auto gpuContextSpecific  = static_cast<GpuContextSpecific *>(gpuContext);
             MOS_OS_CHK_NULL_RETURN(gpuContextSpecific);
 
-            MOS_OS_CHK_STATUS_RETURN(gpuContextSpecific->Init(gpuContextMgr->GetOsContext()));
+            MOS_OS_CHK_STATUS_RETURN(gpuContextSpecific->Init(gpuContextMgr->GetOsContext(), pOsInterface, GpuNode, createOption));
 
             pOsContextSpecific->SetGpuContextHandle(mosGpuCxt, gpuContextSpecific->GetGpuContextHandle());
+
+            if (typeid(*createOption) == typeid(MOS_GPUCTX_CREATOPTIONS_ENHANCED))
+            {
+                PMOS_GPUCTX_CREATOPTIONS_ENHANCED createOptionEnhanced = static_cast<PMOS_GPUCTX_CREATOPTIONS_ENHANCED>(createOption);
+                gpuContextSpecific->SetContextParam(createOptionEnhanced);
+            }
         }
 
         return MOS_STATUS_SUCCESS;
@@ -6037,7 +6043,7 @@ MOS_STATUS Mos_Specific_InitInterface(
     MOS_OS_NORMALMESSAGE("mm:Mos_Specific_InitInterface called.");
 
     pOsInterface->modularizedGpuCtxEnabled    = true;
-    pOsInterface->veDefaultEnable             = false;
+    pOsInterface->veDefaultEnable             = true;
 
     // Create Linux OS Context
     pOsContext = (PMOS_OS_CONTEXT)MOS_AllocAndZeroMemory(sizeof(MOS_OS_CONTEXT));
