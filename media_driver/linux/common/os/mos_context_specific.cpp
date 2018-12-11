@@ -447,7 +447,16 @@ MOS_STATUS OsContextSpecific::Init(PMOS_CONTEXT pOsDriverContext)
         m_tileYFlag      = MEDIA_IS_SKU(&m_skuTable, FtrTileY);
     
     #ifndef ANDROID
-        m_intelContext = mos_gem_context_create(pOsDriverContext->bufmgr);
+
+        if (MEDIA_IS_SKU(&m_skuTable, FtrContextBasedScheduling))
+        {
+            m_intelContext = mos_gem_context_create_v2(pOsDriverContext->bufmgr,
+                                                       I915_GEM_CONTEXT_SHARE_GTT | I915_GEM_CONTEXT_SINGLE_TIMELINE);
+        }
+        else
+        {
+            m_intelContext = mos_gem_context_create(pOsDriverContext->bufmgr);
+        }
     
         if (m_intelContext == nullptr)
         {
