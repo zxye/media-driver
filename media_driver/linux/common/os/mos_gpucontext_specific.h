@@ -56,10 +56,19 @@ public:
     //! \details  Linux specific initialize for gpu context
     //! \param    [out] osContext
     //!           Os context pointer
+    //! \param    [in] osInterface
+    //!           OS interface
+    //! \param    [in] GpuNode
+    //!           GPU node
+    //! \param    [in] createOption
+    //!           Context option
     //! \return   MOS_STATUS
     //!           Return MOS_STATUS_SUCCESS if successful, otherwise failed
     //!
-    MOS_STATUS Init(OsContext *osContext);
+    MOS_STATUS Init(OsContext *osContext,
+                    PMOS_INTERFACE osInterface,
+                    MOS_GPU_NODE GpuNode,
+                    PMOS_GPUCTX_CREATOPTIONS createOption);
 
     void Clear(void);
 
@@ -174,6 +183,8 @@ public:
     //!
     MOS_STATUS AllocateGPUStatusBuf();
 
+    MOS_STATUS SetContextParam(PMOS_GPUCTX_CREATOPTIONS_ENHANCED createOptionEnhanced);
+
 #if MOS_COMMAND_RESINFO_DUMP_SUPPORTED
     void                PushCmdResPtr(const void *p) { m_cmdResPtrs.push_back(p); }
     void                ClearCmdResPtrs() { m_cmdResPtrs.clear(); }
@@ -227,6 +238,10 @@ private:
 
     //! \brief    Os context
     OsContext *m_osContext = nullptr;
+
+    MOS_GPUCTX_CREATOPTIONS_ENHANCED *m_createOptionEnhanced;
+    MOS_LINUX_CONTEXT*  m_i915Context;
+    uint32_t     m_i915ExecFlag;
 
 #if MOS_COMMAND_RESINFO_DUMP_SUPPORTED
     std::vector<const void *> m_cmdResPtrs; //!< Command OS resource pointers registered by pfnRegisterResource

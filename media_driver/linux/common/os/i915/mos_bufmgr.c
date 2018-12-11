@@ -4648,3 +4648,146 @@ exit:
 
     return bufmgr_gem != nullptr ? &bufmgr_gem->bufmgr : nullptr;
 }
+
+struct mos_linux_context *
+mos_gem_context_create_v2(struct mos_bufmgr *bufmgr, __u32 flags)
+{
+    struct mos_bufmgr_gem *bufmgr_gem = (struct mos_bufmgr_gem *)bufmgr;
+    struct drm_i915_gem_context_create_v2 create;
+    struct mos_linux_context *context = nullptr;
+    int ret;
+
+    context = (struct mos_linux_context *)calloc(1, sizeof(*context));
+    if (!context)
+        return nullptr;
+
+    memclear(create);
+    create.flags = flags;
+    create.share_ctx = 0;
+    ret = drmIoctl(bufmgr_gem->fd, DRM_IOCTL_I915_GEM_CONTEXT_CREATE_v2, &create);
+    if (ret != 0) {
+        MOS_DBG("DRM_IOCTL_I915_GEM_CONTEXT_CREATE failed: %s\n",
+            strerror(errno));
+        free(context);
+        return nullptr;
+    }
+
+    context->ctx_id = create.ctx_id;
+    context->bufmgr = bufmgr;
+
+    return context;
+}
+
+
+int mos_query_engines(int fd,
+                      __u16 engine_class,
+                      __u64 caps,
+                      unsigned int *nengine,
+                      struct class_instance *ci)
+{
+    struct drm_i915_query query;
+    struct drm_i915_query_item query_item;
+    struct drm_i915_query_engine_info *engines;
+    int ret, len;
+
+    engines = (drm_i915_query_engine_info *)malloc(4096);
+    memset(engines,0,4096);
+    memclear(query_item);
+    query_item.query_id = DRM_I915_QUERY_ENGINE_INFO;
+    query_item.length = 0;
+    query_item.data_ptr = (uintptr_t)engines;
+    memclear(query);
+    query.num_items = 1;
+    query.items_ptr = (uintptr_t)&query_item;
+
+    ret = drmIoctl(fd, DRM_IOCTL_I915_QUERY, &query);
+    if (ret)
+    {
+        goto fini;
+    }
+    len = query_item.length;
+
+    memset(engines,0,4096);
+    memclear(query_item);
+    query_item.query_id = DRM_I915_QUERY_ENGINE_INFO;
+    query_item.length = len;
+    query_item.data_ptr = (uintptr_t)engines;
+    memclear(query);
+    query.num_items = 1;
+    query.items_ptr = (uintptr_t)&query_item;
+
+    ret = drmIoctl(fd, DRM_IOCTL_I915_QUERY, &query);
+    if (ret)
+    {
+        goto fini;
+    }
+
+    int i, num;
+    for (i = 0, num = 0; i < engines->num_engines; i++) {
+        struct drm_i915_engine_info *engine =
+            (struct drm_i915_engine_info *)&engines->engines[i];
+        if ( engine_class == engine->engine_class
+             && ((caps & engine->capabilities) || caps == 0))
+        {
+            ci->engine_class = engine_class;
+            ci->engine_instance = engine->engine_instance;
+            ci++;
+            num++;
+        }
+    }
+    if (num > *nengine)
+    {
+        fprintf(stderr,"%s: Number of engine instances out of range, %d,%d\n",
+                __FUNCTION__, num, *nengine);
+        goto fini;
+    }
+    *nengine = num;
+
+
+fini:
+    free(engines);
+    return ret;
+}
+
+int mos_set_context_param_load_balance(struct mos_linux_context *ctx,
+                     const struct class_instance *ci,
+                     unsigned int count)
+{
+    int ret;
+
+    assert(ci);
+
+    struct balancer {
+        uint64_t next_extension;
+        uint64_t name;
+
+        uint64_t flags;
+        uint64_t mask;
+
+        uint64_t mbz[4];
+    } balancer;
+    memclear(balancer);
+    balancer.name  = I915_CONTEXT_ENGINES_EXT_LOAD_BALANCE;
+    balancer.mask = ~0ull;
+
+    /*
+    struct set_engines {
+        uint64_t extension;
+        struct class_instance engines[count];
+    } set_engines;
+    */
+    uint32_t size = sizeof(uint64_t) + count*sizeof(struct class_instance);
+    uint32_t* set_engines = (uint32_t*) malloc(size);
+    if (NULL == set_engines)
+    {
+        return -ENOMEM;
+    }
+    *((uint64_t*)set_engines) = (uintptr_t)(&balancer); /*set_engines->extension*/
+    memcpy(set_engines+2, ci, count * sizeof(struct class_instance)); /*set_engines->engines*/
+    ret = mos_set_context_param(ctx,
+                          size,
+                          I915_CONTEXT_PARAM_ENGINES,
+                          (uintptr_t)set_engines);
+    free(set_engines);
+    return ret;
+}
