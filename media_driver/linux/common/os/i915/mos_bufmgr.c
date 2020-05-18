@@ -286,6 +286,7 @@ struct mos_bo_gem {
     * Whether to remove the dependency of this bo in exebuf.
     */
     bool exec_async;
+    bool exec_write;
 
     /**
      * Size in bytes of this buffer and its relocation descendents.
@@ -534,6 +535,9 @@ mos_add_validate_buffer2(struct mos_linux_bo *bo, int need_fence)
         flags |= EXEC_OBJECT_PINNED;
     if (bo_gem->exec_async)
         flags |= EXEC_OBJECT_ASYNC;
+    if (bo_gem->exec_write)
+        flags |= EXEC_OBJECT_WRITE;
+
 
     if (bo_gem->validate_index != -1) {
         bufmgr_gem->exec2_objects[bo_gem->validate_index].flags |= flags;
@@ -699,6 +703,49 @@ mos_gem_bo_cache_purge_bucket(struct mos_bufmgr_gem *bufmgr_gem,
     }
 }
 
+static int
+mos_gem_bo_set_softpin_offset(struct mos_linux_bo *bo, uint64_t offset)
+{
+    struct mos_bo_gem *bo_gem = (struct mos_bo_gem *) bo;
+
+    bo_gem->is_softpin = true;
+    bo->offset64 = offset;
+    bo->offset = offset;
+    return 0;
+}
+
+static int
+mos_gem_bo_set_softpin(MOS_LINUX_BO *bo)
+{
+    int ret = 0;
+    struct mos_bufmgr_gem *bufmgr_gem = (struct mos_bufmgr_gem *) bo->bufmgr;
+    uint64_t offset = bufmgr_gem->head_offset;
+
+    // if offset is over 48b address range, return error
+    if (offset > 0xFFFFFFFFFFFF)
+    {
+        MOS_DBG("softpin failed: address over 48b range");
+        return -EINVAL;
+    }
+
+    if (!mos_gem_bo_is_softpin(bo))
+    {
+        // update the head_offset, need to be 64K aligned
+        bufmgr_gem->head_offset += MOS_ALIGN_CEIL(bo->size, 64*1024);
+		printf("offset = %lu\n", bufmgr_gem->head_offset);
+
+        // softpin the BO to the given offset
+        ret = mos_gem_bo_set_softpin_offset(bo, offset);
+        if (ret == 0)
+        {
+            ret = mos_bo_use_48b_address_range(bo, 1);
+        }
+        return ret;
+    }
+
+    return ret;
+}
+
 drm_export struct mos_linux_bo *
 mos_gem_bo_alloc_internal(struct mos_bufmgr *bufmgr,
                 const char *name,
@@ -840,6 +887,7 @@ retry:
     MOS_DBG("bo_create: buf %d (%s) %ldb\n",
         bo_gem->gem_handle, bo_gem->name, size);
 
+	mos_gem_bo_set_softpin(&bo_gem->bo);
     return &bo_gem->bo;
 }
 
@@ -2278,6 +2326,13 @@ mos_gem_bo_set_exec_object_async(struct mos_linux_bo *bo)
     bo_gem->exec_async = true;
 }
 
+static void
+mos_gem_bo_set_exec_object_write(struct mos_linux_bo *bo)
+{
+    struct mos_bo_gem *bo_gem = (struct mos_bo_gem *)bo;
+    bo_gem->exec_write = true;
+}
+
 static int
 mos_gem_bo_add_softpin_target(struct mos_linux_bo *bo, struct mos_linux_bo *target_bo)
 {
@@ -2901,48 +2956,6 @@ mos_gem_bo_get_tiling(struct mos_linux_bo *bo, uint32_t * tiling_mode,
     *tiling_mode = bo_gem->tiling_mode;
     *swizzle_mode = bo_gem->swizzle_mode;
     return 0;
-}
-
-static int
-mos_gem_bo_set_softpin_offset(struct mos_linux_bo *bo, uint64_t offset)
-{
-    struct mos_bo_gem *bo_gem = (struct mos_bo_gem *) bo;
-
-    bo_gem->is_softpin = true;
-    bo->offset64 = offset;
-    bo->offset = offset;
-    return 0;
-}
-
-static int
-mos_gem_bo_set_softpin(MOS_LINUX_BO *bo)
-{
-    int ret = 0;
-    struct mos_bufmgr_gem *bufmgr_gem = (struct mos_bufmgr_gem *) bo->bufmgr;
-    uint64_t offset = bufmgr_gem->head_offset;
-
-    // if offset is over 48b address range, return error
-    if (offset > 0xFFFFFFFFFFFF)
-    {
-        MOS_DBG("softpin failed: address over 48b range");
-        return -EINVAL;
-    }
-
-    if (!mos_gem_bo_is_softpin(bo))
-    {
-        // update the head_offset, need to be 64K aligned
-        bufmgr_gem->head_offset += MOS_ALIGN_CEIL(bo->size, 64*1024);
-
-        // softpin the BO to the given offset
-        ret = mos_gem_bo_set_softpin_offset(bo, offset);
-        if (ret == 0)
-        {
-            ret = mos_bo_use_48b_address_range(bo, 1);
-        }
-        return ret;
-    }
-
-    return ret;
 }
 
 struct mos_linux_bo *
@@ -3908,6 +3921,7 @@ mos_bufmgr_gem_init(int fd, int batch_size)
     ret = drmIoctl(bufmgr_gem->fd, DRM_IOCTL_I915_GETPARAM, &gp);
     if (ret == 0 && *gp.value > 0)
         bufmgr_gem->bufmgr.set_exec_object_async = mos_gem_bo_set_exec_object_async;
+    bufmgr_gem->bufmgr.set_exec_object_write = mos_gem_bo_set_exec_object_write;
 
     struct drm_i915_gem_context_param context_param;
     memset(&context_param, 0, sizeof(context_param));

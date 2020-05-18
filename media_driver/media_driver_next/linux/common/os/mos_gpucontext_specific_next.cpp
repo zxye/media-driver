@@ -994,8 +994,12 @@ MOS_STATUS GpuContextSpecificNext::SubmitCommandBuffer(
             mos_bo_set_exec_object_async(alloc_bo);
         }
 
+        if (currentPatch->uiWriteOperation)
+            mos_bo_set_exec_object_write(alloc_bo);
+
         // This call will patch the command buffer with the offsets of the indirect state region of the command buffer
-        if (mos_gem_bo_is_softpin(alloc_bo))
+        if (alloc_bo != tempCmdBo)
+        if (0)//(mos_gem_bo_is_softpin(alloc_bo))
         {
             ret = mos_bo_emit_reloc(tempCmdBo, 0, alloc_bo, 0, I915_GEM_DOMAIN_RENDER, I915_GEM_DOMAIN_CPU);
         }
